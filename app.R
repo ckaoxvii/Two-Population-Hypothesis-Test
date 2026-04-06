@@ -76,7 +76,7 @@ ui <- page_sidebar(
       card(
         full_screen = TRUE,
         card_header("\\(p\\)-Value Plot"),
-        plotOutput("pvalue_plot", height = "300px")
+        plotOutput("pvalue_plot", height = "320px")
       )
     )
   )
@@ -117,7 +117,6 @@ server <- function(input, output, session) {
           min = 1,
           step = 1
         ),
-
         tags$label(HTML("Group 2 Proportion, \\(\\hat{p}_2\\):"), `for` = "p2_hat"),
         numericInput(
           "p2_hat",
@@ -154,7 +153,6 @@ server <- function(input, output, session) {
           min = 1,
           step = 1
         ),
-
         tags$label("Group 2 Successes:", `for` = "x2"),
         numericInput(
           "x2",
@@ -263,12 +261,18 @@ server <- function(input, output, session) {
       tags$p(HTML("\\(H_0: p_1 - p_2 = 0\\)")),
       tags$p(HTML(alt_text)),
       tags$hr(),
-      tags$p(HTML(paste0("Group 1: \\(x_1 = ", cdat$x1, "\\), \\(n_1 = ", cdat$n1,
-                         "\\), \\(\\hat{p}_1 = ", fmt(cdat$p1_hat, 4), "\\)"))),
-      tags$p(HTML(paste0("Group 2: \\(x_2 = ", cdat$x2, "\\), \\(n_2 = ", cdat$n2,
-                         "\\), \\(\\hat{p}_2 = ", fmt(cdat$p2_hat, 4), "\\)"))),
-      tags$p(HTML(paste0("Observed difference: \\(\\hat{p}_1 - \\hat{p}_2 = ",
-                         fmt(cdat$diff_hat, 4), "\\)")))
+      tags$p(HTML(paste0(
+        "Group 1: \\(x_1 = ", cdat$x1, "\\), \\(n_1 = ", cdat$n1,
+        "\\), \\(\\hat{p}_1 = ", fmt(cdat$p1_hat, 4), "\\)"
+      ))),
+      tags$p(HTML(paste0(
+        "Group 2: \\(x_2 = ", cdat$x2, "\\), \\(n_2 = ", cdat$n2,
+        "\\), \\(\\hat{p}_2 = ", fmt(cdat$p2_hat, 4), "\\)"
+      ))),
+      tags$p(HTML(paste0(
+        "Observed difference: \\(\\hat{p}_1 - \\hat{p}_2 = ",
+        fmt(cdat$diff_hat, 4), "\\)"
+      )))
     )
   })
 
@@ -306,26 +310,154 @@ server <- function(input, output, session) {
   })
 
   output$pvalue_plot <- renderPlot({
-    cdat <- calc()
+      cdat <- calc()
 
-    x <- seq(-4, 4, length.out = 1000)
-    y <- dnorm(x)
-
-    df <- tibble(x = x, y = y)
-
-    ggplot(df, aes(x, y)) +
-      geom_line(linewidth = 1) +
-      geom_vline(xintercept = cdat$z, linetype = "dashed", linewidth = 1) +
-      labs(
-        x = "z",
-        y = "Density",
-      ) +
-      theme_minimal(base_size = 14) +
-      theme(
-        panel.grid.major = element_blank(),
-        palen.grid.minor = element_blank()
+      x <- seq(-4.5, 4.5, length.out = 2000)
+      df <- tibble(
+        x = x,
+        y = dnorm(x)
       )
+
+      z_abs <- abs(cdat$z)
+
+      p <- ggplot(df, aes(x, y)) +
+        geom_line(linewidth = 1, color = "black") +
+        labs(
+          x = "z",
+          y = "Density"
+        ) +
+        theme_minimal(base_size = 14) +
+        theme(
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank()
+        )
+
+      if (cdat$alt == "two.sided") {
+        left_tail <- df %>% filter(x <= -z_abs)
+        right_tail <- df %>% filter(x >= z_abs)
+
+        left_label <- tibble(
+          x = -z_abs - 0.7,
+          y = dnorm(-z_abs) * 0.7,
+          label = paste0("Area = ", formatC(cdat$p_val / 2, format = "f", digits = 4))
+        )
+
+        right_label <- tibble(
+          x = z_abs + 0.7,
+          y = dnorm(z_abs) * 0.7,
+          label = paste0("Area = ", formatC(cdat$p_val / 2, format = "f", digits = 4))
+        )
+
+        p <- p +
+          geom_area(
+            data = left_tail,
+            aes(x = x, y = y),
+            inherit.aes = FALSE,
+            fill = "#A90533",
+            alpha = 0.35
+          ) +
+          geom_area(
+            data = right_tail,
+            aes(x = x, y = y),
+            inherit.aes = FALSE,
+            fill = "#A90533",
+            alpha = 0.35
+          ) +
+          geom_vline(
+            xintercept = c(-z_abs, z_abs),
+            linetype = "dashed",
+            linewidth = 1,
+            color = "#A90533"
+          ) +
+          geom_label(
+            data = left_label,
+            aes(x = x, y = y, label = label),
+            inherit.aes = FALSE,
+            fill = "white",
+            color = "#A90533",
+            label.size = 0.25,
+            size = 4
+          ) +
+          geom_label(
+            data = right_label,
+            aes(x = x, y = y, label = label),
+            inherit.aes = FALSE,
+            fill = "white",
+            color = "#A90533",
+            label.size = 0.25,
+            size = 4
+          )
+
+      } else if (cdat$alt == "greater") {
+        right_tail <- df %>% filter(x >= cdat$z)
+
+        right_label <- tibble(
+          x = cdat$z + 0.9,
+          y = dnorm(cdat$z) * 0.7,
+          label = paste0("Area = ", formatC(cdat$p_val, format = "f", digits = 4))
+        )
+
+        p <- p +
+          geom_area(
+            data = right_tail,
+            aes(x = x, y = y),
+            inherit.aes = FALSE,
+            fill = "#A90533",
+            alpha = 0.35
+          ) +
+          geom_vline(
+            xintercept = cdat$z,
+            linetype = "dashed",
+            linewidth = 1,
+            color = "#A90533"
+          ) +
+          geom_label(
+            data = right_label,
+            aes(x = x, y = y, label = label),
+            inherit.aes = FALSE,
+            fill = "white",
+            color = "#A90533",
+            label.size = 0.25,
+            size = 4
+          )
+
+      } else if (cdat$alt == "less") {
+        left_tail <- df %>% filter(x <= cdat$z)
+
+        left_label <- tibble(
+          x = cdat$z - 0.9,
+          y = dnorm(cdat$z) * 0.7,
+          label = paste0("Area = ", formatC(cdat$p_val, format = "f", digits = 4))
+        )
+
+        p <- p +
+          geom_area(
+            data = left_tail,
+            aes(x = x, y = y),
+            inherit.aes = FALSE,
+            fill = "#A90533",
+            alpha = 0.35
+          ) +
+          geom_vline(
+            xintercept = cdat$z,
+            linetype = "dashed",
+            linewidth = 1,
+            color = "#A90533"
+          ) +
+          geom_label(
+            data = left_label,
+            aes(x = x, y = y, label = label),
+            inherit.aes = FALSE,
+            fill = "white",
+            color = "#A90533",
+            label.size = 0.25,
+            size = 4
+          )
+      }
+
+    p
   })
+
 }
 
 shinyApp(ui, server)
